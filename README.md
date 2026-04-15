@@ -80,7 +80,7 @@ $$
 For normalized vectors, inner product equals cosine similarity:
 
 $$
-	ext{sim}(q, x) = \hat{e}(q)^\top \hat{e}(x) = \cos(\theta)
+\text{sim}(q, x) = \hat{e}(q)^\top \hat{e}(x) = \cos(\theta)
 $$
 
 Top-k retrieval:
@@ -119,7 +119,7 @@ where:
 Sampling is disabled for very low temperature:
 
 $$
-	ext{do_sample} = (T > 0.05)
+\text{do_sample} = (T > 0.05)
 $$
 
 ### 5) Operational Metrics
@@ -127,11 +127,11 @@ $$
 Workspace metrics are aggregated as:
 
 $$
-	ext{avg_latency_ms} = \frac{\sum_i \text{latency}_i}{Q}
+\text{avg_latency_ms} = \frac{\sum_i \text{latency}_i}{Q}
 $$
 
 $$
-	ext{cache_hit_rate}(\%) = 100 \cdot \frac{H}{Q}
+\text{cache_hit_rate}(\%) = 100 \cdot \frac{H}{Q}
 $$
 
 where Q is total queries and H is cache-hit queries.
@@ -233,15 +233,15 @@ This repository currently logs operational metrics (latency, cache behavior, que
 For each query with relevant set G and retrieved ranked list R_k:
 
 $$
-	ext{Recall@k} = \frac{|G \cap R_k|}{|G|}
+\text{Recall@k} = \frac{|G \cap R_k|}{|G|}
 $$
 
 $$
-	ext{Precision@k} = \frac{|G \cap R_k|}{k}
+\text{Precision@k} = \frac{|G \cap R_k|}{k}
 $$
 
 $$
-	ext{MRR} = \frac{1}{|Q|}\sum_{q \in Q}\frac{1}{\operatorname{rank}_q}
+\text{MRR} = \frac{1}{|Q|}\sum_{q \in Q}\frac{1}{\operatorname{rank}_q}
 $$
 
 where rank_q is the rank position of the first relevant chunk.
@@ -253,13 +253,13 @@ Given prediction y and reference y*:
 - Exact Match (EM):
 
 $$
-	ext{EM} = \mathbb{1}[\text{normalize}(y) = \text{normalize}(y^*)]
+\text{EM} = \mathbb{1}[\text{normalize}(y) = \text{normalize}(y^*)]
 $$
 
 - Token-level F1 (for extractive QA style):
 
 $$
-	ext{F1} = \frac{2PR}{P + R}
+\text{F1} = \frac{2PR}{P + R}
 $$
 
 with P and R computed on token overlap.
@@ -274,7 +274,7 @@ with P and R computed on token overlap.
 Use a citation-supported score:
 
 $$
-	ext{Groundedness} = \frac{\#\text{claims supported by retrieved evidence}}{\#\text{total claims}}
+\text{Groundedness} = \frac{\#\text{claims supported by retrieved evidence}}{\#\text{total claims}}
 $$
 
 This is especially important for multimodal OCR noise and dense retrieval drift.
@@ -367,3 +367,5 @@ run_project.bat
 Use this project as:
 
 Offline Multimodal RAG for Local Document Intelligence, internal implementation report, 2026.
+
+
