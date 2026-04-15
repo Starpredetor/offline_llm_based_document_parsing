@@ -86,7 +86,7 @@ $$
 Top-k retrieval:
 
 $$
-R_k(q) = \operatorname*{arg\,topk}_{x \in D} \text{sim}(q, x)
+R_k(q) = \mathrm{TopK}_{x \in D}\, \text{sim}(q, x)
 $$
 
 Implementation uses FAISS IndexFlatIP, which performs exact maximum inner-product search.
@@ -113,13 +113,13 @@ $$
 
 where:
 
-- f = frequency_penalty
-- p_r = presence_penalty
+- $f = \text{frequency\_penalty}$
+- $p_r = \text{presence\_penalty}$
 
 Sampling is disabled for very low temperature:
 
 $$
-\text{do_sample} = (T > 0.05)
+\text{do\_sample} = (T > 0.05)
 $$
 
 ### 5) Operational Metrics
@@ -127,11 +127,11 @@ $$
 Workspace metrics are aggregated as:
 
 $$
-\text{avg_latency_ms} = \frac{\sum_i \text{latency}_i}{Q}
+\text{avg\_latency\_ms} = \frac{\sum_i \text{latency}_i}{Q}
 $$
 
 $$
-\text{cache_hit_rate}(\%) = 100 \cdot \frac{H}{Q}
+\text{cache\_hit\_rate}(\%) = 100 \cdot \frac{H}{Q}
 $$
 
 where Q is total queries and H is cache-hit queries.
@@ -241,7 +241,7 @@ $$
 $$
 
 $$
-\text{MRR} = \frac{1}{|Q|}\sum_{q \in Q}\frac{1}{\operatorname{rank}_q}
+\text{MRR} = \frac{1}{|Q|}\sum_{q \in Q}\frac{1}{\text{rank}_q}
 $$
 
 where rank_q is the rank position of the first relevant chunk.
@@ -274,8 +274,10 @@ with P and R computed on token overlap.
 Use a citation-supported score:
 
 $$
-\text{Groundedness} = \frac{\#\text{claims supported by retrieved evidence}}{\#\text{total claims}}
+\text{Groundedness} = \frac{N_{\text{supported}}}{N_{\text{claims}}}
 $$
+
+where $N_{\text{supported}}$ is the number of claims supported by retrieved evidence and $N_{\text{claims}}$ is the total number of claims.
 
 This is especially important for multimodal OCR noise and dense retrieval drift.
 
@@ -367,5 +369,7 @@ run_project.bat
 Use this project as:
 
 Offline Multimodal RAG for Local Document Intelligence, internal implementation report, 2026.
+
+
 
 
