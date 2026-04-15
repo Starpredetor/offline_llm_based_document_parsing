@@ -113,13 +113,13 @@ $$
 
 where:
 
-- $f = \text{frequency\_penalty}$
-- $p_r = \text{presence\_penalty}$
+- $f = \text{frequency penalty}$
+- $p_r = \text{presence penalty}$
 
 Sampling is disabled for very low temperature:
 
 $$
-\text{do\_sample} = (T > 0.05)
+\text{do sample} = (T > 0.05)
 $$
 
 ### 5) Operational Metrics
@@ -127,11 +127,11 @@ $$
 Workspace metrics are aggregated as:
 
 $$
-\text{avg\_latency\_ms} = \frac{\sum_i \text{latency}_i}{Q}
+\text{average latency ms} = \frac{\sum_i \text{latency}_i}{Q}
 $$
 
 $$
-\text{cache\_hit\_rate}(\%) = 100 \cdot \frac{H}{Q}
+\text{cache hit rate}(\%) = 100 \cdot \frac{H}{Q}
 $$
 
 where Q is total queries and H is cache-hit queries.
@@ -369,6 +369,7 @@ run_project.bat
 Use this project as:
 
 Offline Multimodal RAG for Local Document Intelligence, internal implementation report, 2026.
+
 
 
 
