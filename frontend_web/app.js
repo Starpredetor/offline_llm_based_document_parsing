@@ -1,5 +1,18 @@
 const apiBase = window.location.origin;
 
+const queryDefaults = {
+  top_k: 5,
+  temperature: 0.7,
+  top_p: 0.9,
+  generation_top_k: 40,
+  max_tokens: 700,
+  frequency_penalty: 0.2,
+  presence_penalty: 0.15,
+  query_type: "auto",
+  output_mode: "auto",
+  stream_chunk_chars: 120,
+};
+
 const state = {
   currentPage: "dashboard",
   currentProject: "default",
@@ -7,168 +20,249 @@ const state = {
   documents: [],
   chats: [],
   pendingProjectFiles: [],
-  ui: {
-    sidebarOpen: false,
-    leftPanelOpen: true,
-    rightPanelOpen: false,
-  },
+  isSending: false,
 };
 
 function byId(id) {
   return document.getElementById(id);
 }
 
-async function fetchJson(url, options = {}) {
-  const resp = await fetch(url, options);
-  if (!resp.ok) {
-    throw new Error(await resp.text());
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function inlineMarkdown(line) {
+  return escapeHtml(line)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+
+function renderMarkdownTextBlock(text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const html = [];
+  let paragraph = [];
+  let list = [];
+
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    html.push(`<p>${paragraph.map(inlineMarkdown).join("<br>")}</p>`);
+    paragraph = [];
   }
-  return resp.json();
+
+  function flushList() {
+    if (!list.length) return;
+    html.push(`<ul>${list.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+    list = [];
+  }
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      flushParagraph();
+      list.push(bullet[1]);
+      return;
+    }
+
+    flushList();
+    paragraph.push(trimmed);
+  });
+
+  flushParagraph();
+  flushList();
+  return html.join("");
+}
+
+function renderMarkdown(text) {
+  const raw = String(text || "");
+  const blocks = [];
+  let cursor = 0;
+  const fencePattern = /```[\w-]*\n([\s\S]*?)```/g;
+  let match;
+
+  while ((match = fencePattern.exec(raw))) {
+    blocks.push({ type: "text", value: raw.slice(cursor, match.index) });
+    blocks.push({ type: "code", value: match[1] });
+    cursor = match.index + match[0].length;
+  }
+  blocks.push({ type: "text", value: raw.slice(cursor) });
+
+  return blocks
+    .map((block) => block.type === "code" ? `<pre><code>${escapeHtml(block.value)}</code></pre>` : renderMarkdownTextBlock(block.value))
+    .join("");
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { message: text };
+  }
+
+  if (!response.ok) {
+    const detail = payload.detail || payload.message || response.statusText;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return payload;
+}
+
+function setStatus(text, variant = "") {
+  const pill = byId("status-pill");
+  pill.textContent = text;
+  pill.className = `status-pill ${variant}`.trim();
+}
+
+let toastTimer;
+function showToast(message) {
+  const toast = byId("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 3200);
+}
+
+function formatDate(seconds) {
+  if (!seconds) return "Recently";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(seconds * 1000));
 }
 
 function hashFor(page, projectId) {
   if (page === "workspace") {
-    return `#/workspace/${projectId || state.currentProject || "default"}`;
+    return `#/workspace/${encodeURIComponent(projectId || state.currentProject || "default")}`;
   }
   return `#/${page}`;
 }
 
 function parseHash() {
   const hash = window.location.hash || "#/dashboard";
-  const clean = hash.replace(/^#\/?/, "");
-  const parts = clean.split("/").filter(Boolean);
-  if (parts[0] === "workspace") {
-    return { page: "workspace", projectId: parts[1] || state.currentProject || "default" };
-  }
-  if (parts[0] === "create-project") {
-    return { page: "create-project", projectId: state.currentProject };
-  }
+  const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  if (parts[0] === "workspace") return { page: "workspace", projectId: parts[1] || state.currentProject };
+  if (parts[0] === "create-project") return { page: "create-project", projectId: state.currentProject };
   return { page: "dashboard", projectId: state.currentProject };
 }
 
 function setActivePage(page, projectId = state.currentProject, updateHash = true) {
   state.currentPage = page;
-  if (projectId) {
-    state.currentProject = projectId;
-  }
+  if (projectId) state.currentProject = projectId;
 
-  document.querySelectorAll(".view").forEach((el) => el.classList.remove("active"));
-  const target = byId(`view-${page}`);
-  if (target) {
-    target.classList.add("active");
-  }
+  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+  byId(`view-${page}`)?.classList.add("active");
 
-  document.querySelectorAll(".tab-btn").forEach((el) => el.classList.remove("active"));
-  const activeTab = document.querySelector(`.tab-btn[data-view='${page}']`);
-  if (activeTab) {
-    activeTab.classList.add("active");
-  }
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === page);
+  });
 
   if (updateHash) {
     const nextHash = hashFor(page, projectId);
-    if (window.location.hash !== nextHash) {
-      window.location.hash = nextHash;
-    }
+    if (window.location.hash !== nextHash) window.location.hash = nextHash;
   }
 
   updateProjectLabel();
 }
 
-function updateProjectLabel() {
-  const project = state.projects.find((item) => item.id === state.currentProject);
-  byId("chat-project-name").textContent = project ? `Project: ${project.name}` : "Project: Default";
+function currentProject() {
+  return state.projects.find((project) => project.id === state.currentProject);
 }
 
-function renderSidebarProjects() {
-  const root = byId("shell-projects");
+function updateProjectLabel() {
+  byId("chat-project-name").textContent = currentProject()?.name || "Default Project";
+}
+
+function renderMetricCards(metrics = {}) {
+  const items = [
+    ["Documents", metrics.uploaded_documents ?? 0],
+    ["Projects", metrics.projects ?? state.projects.length],
+    ["Chats", metrics.queries ?? 0],
+    ["Cache hit", `${metrics.cache_hit_rate ?? 0}%`],
+  ];
+
+  byId("dashboard-cards").innerHTML = items
+    .map(([label, value]) => `
+      <article class="metric-card">
+        <div class="metric-label">${escapeHtml(label)}</div>
+        <div class="metric-value">${escapeHtml(value)}</div>
+      </article>
+    `)
+    .join("");
+}
+
+function renderProjectList(rootId, limit = 12) {
+  const root = byId(rootId);
+  const projects = [...state.projects].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).slice(0, limit);
+
+  if (!projects.length) {
+    root.innerHTML = "<div class='empty-state'>No projects yet.</div>";
+    return;
+  }
+
   root.innerHTML = "";
-
-  const items = [...state.projects]
-    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-    .slice(0, 14);
-
-  items.forEach((project) => {
-    const row = document.createElement("div");
-    row.className = "file";
-    row.innerHTML = `<span>${project.name}</span><span class='badge'>•</span>`;
-    row.onclick = async () => {
-      state.currentProject = project.id;
-      setActivePage("workspace", project.id);
-      await loadProjectDocuments();
-    };
+  projects.forEach((project) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "project-row";
+    row.innerHTML = `
+      <span>
+        <span class="item-title">${escapeHtml(project.name)}</span>
+        <span class="item-meta">${formatDate(project.created_at)}</span>
+      </span>
+    `;
+    row.addEventListener("click", () => openProject(project.id));
     root.appendChild(row);
   });
 }
 
-function renderMetricsCards(metrics) {
-  const cards = byId("dashboard-cards");
-  cards.innerHTML = "";
-  const items = [
-    ["Total Docs", metrics.uploaded_documents],
-    ["Projects", metrics.projects],
-    ["Chats", metrics.queries],
-    ["Usage", `${metrics.cache_hit_rate}% cache`],
-  ];
-
-  items.forEach(([k, v]) => {
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML = `<div class='muted'>${k}</div><div><strong>${v}</strong></div>`;
-    cards.appendChild(el);
-  });
-}
-
-function renderRecentProjects() {
-  const root = byId("recent-projects");
-  root.innerHTML = "";
-
-  const nonDefaultProjects = state.projects.filter((p) => p.id !== "default");
-  const recent = [...nonDefaultProjects]
-    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-    .slice(0, 6);
-
-  if (!recent.length) {
-    root.innerHTML = "<div class='muted'>nothing to see here</div>";
-    return;
-  }
-
-  recent.forEach((project) => {
-    const item = document.createElement("div");
-    item.className = "item";
-    item.textContent = `- ${project.name}`;
-    root.appendChild(item);
-  });
-}
-
-function renderRecentChats(chats) {
+function renderRecentChats(chats = []) {
   const root = byId("recent-chats");
-  root.innerHTML = "";
   if (!chats.length) {
-    root.innerHTML = "<div class='muted'>No recent chats.</div>";
+    root.innerHTML = "<div class='empty-state'>Your recent questions will appear here.</div>";
     return;
   }
 
-  chats.forEach((chat) => {
+  root.innerHTML = "";
+  chats.slice(0, 8).forEach((chat) => {
     const item = document.createElement("div");
-    item.className = "item";
-    item.textContent = `- ${chat.query}`;
+    item.className = "list-item";
+    item.innerHTML = `
+      <span class="item-title">${escapeHtml(chat.query)}</span>
+      <span class="item-meta">${formatDate(chat.created_at)} · ${chat.source_count || 0} sources</span>
+    `;
     root.appendChild(item);
   });
 }
 
 function renderPendingProjectFiles() {
   const root = byId("project-files-preview");
-  root.innerHTML = "";
-
   if (!state.pendingProjectFiles.length) {
-    root.innerHTML = "<div class='muted'>No files selected.</div>";
+    root.innerHTML = "<div class='empty-state'>No files selected.</div>";
     return;
   }
 
-  state.pendingProjectFiles.forEach((file, idx) => {
+  root.innerHTML = "";
+  state.pendingProjectFiles.forEach((file, index) => {
     const row = document.createElement("div");
-    row.className = "file";
-    row.innerHTML = `<span>${file.name}</span><button class='button ghost' data-remove='${idx}'>Remove</button>`;
+    row.className = "file-row";
+    row.innerHTML = `
+      <span class="file-main">
+        <span class="item-title">${escapeHtml(file.name)}</span>
+        <span class="item-meta">${Math.ceil(file.size / 1024)} KB</span>
+      </span>
+      <button class="button secondary small" type="button" data-remove="${index}">Remove</button>
+    `;
     root.appendChild(row);
   });
 }
@@ -176,6 +270,131 @@ function renderPendingProjectFiles() {
 function setPendingFiles(fileList) {
   state.pendingProjectFiles = Array.from(fileList || []);
   renderPendingProjectFiles();
+}
+
+async function refreshDashboard() {
+  const payload = await fetchJson(`${apiBase}/workspace/dashboard`);
+  state.projects = payload.projects || [];
+  state.chats = payload.recent_chats || [];
+
+  if (!state.projects.some((project) => project.id === state.currentProject) && state.projects.length) {
+    state.currentProject = state.projects[0].id;
+  }
+
+  renderMetricCards(payload.metrics);
+  renderProjectList("shell-projects", 10);
+  renderProjectList("recent-projects", 8);
+  renderRecentChats(state.chats);
+  updateProjectLabel();
+}
+
+async function openProject(projectId) {
+  state.currentProject = projectId;
+  setActivePage("workspace", projectId);
+  await loadProject();
+}
+
+async function loadProject() {
+  const payload = await fetchJson(`${apiBase}/workspace/projects/${encodeURIComponent(state.currentProject)}`);
+  state.documents = payload.documents || [];
+  state.chats = payload.recent_chats || [];
+  renderDocuments();
+  renderProjectChatHistory();
+}
+
+async function loadProjectDocuments() {
+  const payload = await fetchJson(`${apiBase}/workspace/projects/${encodeURIComponent(state.currentProject)}/documents`);
+  state.documents = payload.items || [];
+  renderDocuments();
+}
+
+function renderDocuments() {
+  const root = byId("chat-documents");
+  const query = byId("doc-search").value.trim().toLowerCase();
+  const docs = query
+    ? state.documents.filter((doc) => (doc.filename || "").toLowerCase().includes(query))
+    : state.documents;
+
+  if (!docs.length) {
+    root.innerHTML = "<div class='empty-state'>No documents found.</div>";
+    return;
+  }
+
+  root.innerHTML = "";
+  docs.slice().reverse().forEach((doc) => {
+    const item = document.createElement("div");
+    item.className = "file-row";
+    item.innerHTML = `
+      <span class="file-main">
+        <span class="item-title">${escapeHtml(doc.filename)}</span>
+        <span class="item-meta">${doc.chunks_added || 0} chunks · ${formatDate(doc.uploaded_at)}</span>
+      </span>
+      <span class="file-actions">
+        <span class="badge">${escapeHtml(doc.status)}</span>
+        <button class="button secondary delete-button" type="button" title="Delete document" data-doc-id="${escapeHtml(doc.id)}">×</button>
+      </span>
+    `;
+    root.appendChild(item);
+  });
+}
+
+function renderSources(sources = []) {
+  const root = byId("source-list");
+  if (!sources.length) {
+    root.innerHTML = "<div class='empty-state'>Sources from the latest answer will appear here.</div>";
+    return;
+  }
+
+  root.innerHTML = "";
+  sources.slice(0, 6).forEach((source, index) => {
+    const details = document.createElement("details");
+    details.className = "source-card";
+    details.open = index === 0;
+    details.innerHTML = `
+      <summary>${escapeHtml(source.source_file || "Source")} <span class="score">${Number(source.score || 0).toFixed(3)}</span></summary>
+      <p>${escapeHtml(source.text || "").slice(0, 650)}</p>
+    `;
+    root.appendChild(details);
+  });
+}
+
+function createMessage(role, content) {
+  const message = document.createElement("article");
+  message.className = `message ${role}`;
+  message.innerHTML = `
+    <span class="role">${role === "user" ? "You" : "Assistant"}</span>
+    <div class="message-content">${renderMarkdown(content || "")}</div>
+  `;
+  byId("chat-messages").appendChild(message);
+  scrollChatToBottom();
+  return message.querySelector(".message-content");
+}
+
+function renderProjectChatHistory() {
+  const root = byId("chat-messages");
+  root.innerHTML = "";
+
+  const recent = [...state.chats].reverse().slice(-4);
+  if (!recent.length) {
+    createMessage("assistant", "Upload documents, then ask a question here.");
+    return;
+  }
+
+  recent.forEach((chat) => {
+    createMessage("user", chat.query || "");
+    createMessage("assistant", chat.answer || "");
+  });
+}
+
+function scrollChatToBottom() {
+  const root = byId("chat-messages");
+  root.scrollTop = root.scrollHeight;
+}
+
+function autoSizeChatInput() {
+  const input = byId("chat-input");
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
 }
 
 async function createProject(name) {
@@ -188,129 +407,36 @@ async function createProject(name) {
 }
 
 async function uploadFiles(projectId, files) {
-  const fd = new FormData();
-  fd.append("project_id", projectId);
-  Array.from(files).forEach((f) => fd.append("files", f));
+  const formData = new FormData();
+  formData.append("project_id", projectId);
+  Array.from(files).forEach((file) => formData.append("files", file));
 
-  const resp = await fetch(`${apiBase}/upload`, {
-    method: "POST",
-    body: fd,
-  });
-  const payload = await resp.json();
-  if (!resp.ok) {
-    throw new Error(JSON.stringify(payload));
-  }
+  const response = await fetch(`${apiBase}/upload`, { method: "POST", body: formData });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || JSON.stringify(payload));
   return payload;
-}
-
-async function deleteDocument(projectId, documentId) {
-  await fetchJson(`${apiBase}/workspace/projects/${projectId}/documents/${documentId}`, {
-    method: "DELETE",
-  });
-}
-
-async function refreshDashboard() {
-  const payload = await fetchJson(`${apiBase}/workspace/dashboard`);
-  state.projects = payload.projects || [];
-  state.chats = payload.recent_chats || [];
-
-  if (!state.projects.some((p) => p.id === state.currentProject) && state.projects.length) {
-    state.currentProject = state.projects[0].id;
-  }
-
-  renderMetricsCards(payload.metrics);
-  renderRecentProjects();
-  renderRecentChats(state.chats);
-  renderSidebarProjects();
-  updateProjectLabel();
-}
-
-async function loadProjectDocuments() {
-  const payload = await fetchJson(`${apiBase}/workspace/projects/${state.currentProject}/documents`);
-  state.documents = payload.items || [];
-
-  const container = byId("chat-documents");
-  container.innerHTML = "";
-  const query = (byId("doc-search").value || "").trim().toLowerCase();
-  const filtered = query
-    ? state.documents.filter((d) => (d.filename || "").toLowerCase().includes(query))
-    : state.documents;
-
-  if (!filtered.length) {
-    container.innerHTML = "<div class='muted'>No documents yet.</div>";
-    return;
-  }
-
-  filtered
-    .slice()
-    .reverse()
-    .forEach((doc) => {
-      const item = document.createElement("div");
-      item.className = "file";
-      item.innerHTML = `<div><strong>${doc.filename}</strong></div>
-      <div class='row'><span class='badge'>${doc.status}</span><button class='button ghost' data-doc-id='${doc.id}'>Delete</button></div>`;
-      container.appendChild(item);
-    });
-}
-
-function createMessageNode(role, markdownText) {
-  const wrapper = document.createElement("div");
-  wrapper.className = `message ${role}`;
-  const content = document.createElement("div");
-  const parser = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
-  if (parser) {
-    content.innerHTML = parser(markdownText || "");
-  } else {
-    content.textContent = markdownText || "";
-  }
-  wrapper.appendChild(content);
-  byId("chat-messages").appendChild(wrapper);
-  byId("chat-messages").scrollTop = byId("chat-messages").scrollHeight;
-  return content;
-}
-
-function updateRightPanel(latencyMs, sources) {
-  byId("debug-info-card").textContent = `Debug: latency ${Math.round(latencyMs)} ms`;
-  byId("token-usage-card").textContent = "Token usage: streaming enabled";
-  if (sources && sources.length) {
-    byId("retrieved-chunks-card").textContent = `Retrieved: ${sources.slice(0, 3).map((s) => s.source_file).join(", ")}`;
-  } else {
-    byId("retrieved-chunks-card").textContent = "Retrieved: no source list returned.";
-  }
 }
 
 async function sendChat() {
   const input = byId("chat-input");
   const query = input.value.trim();
-  if (!query) return;
+  if (!query || state.isSending) return;
 
-  state.chats.push({ role: "user", content: query });
-  createMessageNode("user", `**User:** ${query}`);
+  state.isSending = true;
+  input.disabled = true;
+  byId("chat-send-btn").disabled = true;
+  setStatus("Thinking", "busy");
+
+  createMessage("user", query);
   input.value = "";
-
-  const answerNode = createMessageNode("assistant", "...");
-  const started = performance.now();
-
-  const payload = {
-    query,
-    project_id: state.currentProject,
-    top_k: 5,
-    temperature: 0.7,
-    top_p: 0.9,
-    generation_top_k: 40,
-    max_tokens: 700,
-    frequency_penalty: 0.2,
-    presence_penalty: 0.15,
-    query_type: "auto",
-    output_mode: "auto",
-    stream_chunk_chars: 120,
-  };
+  autoSizeChatInput();
+  const answerNode = createMessage("assistant", "Thinking...");
 
   try {
     const start = await fetchJson(`${apiBase}/query/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...queryDefaults, query, project_id: state.currentProject }),
     });
 
     let full = "";
@@ -318,14 +444,13 @@ async function sendChat() {
     let sources = [];
 
     while (!done) {
-      const next = await fetchJson(`${apiBase}/query/next/${start.job_id}?max_chunks=5`);
+      const next = await fetchJson(`${apiBase}/query/next/${encodeURIComponent(start.job_id)}?max_chunks=5`);
+      if (next.error) throw new Error(next.error);
+
       full += next.delta || "";
-      const parser = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
-      if (parser) {
-        answerNode.innerHTML = parser(full || "...");
-      } else {
-        answerNode.textContent = full || "...";
-      }
+      answerNode.innerHTML = renderMarkdown(full || "Thinking...");
+      scrollChatToBottom();
+
       done = !!next.done;
       if (done) {
         sources = next.sources || [];
@@ -334,18 +459,19 @@ async function sendChat() {
       }
     }
 
-    state.chats.push({ role: "assistant", content: full });
-    updateRightPanel(performance.now() - started, sources);
+    renderSources(sources);
     await refreshDashboard();
+    setStatus("Ready", "ok");
   } catch (error) {
-    answerNode.textContent = `Query failed: ${error.message}`;
+    answerNode.innerHTML = renderMarkdown(`Query failed: ${error.message}`);
+    setStatus("Error", "error");
+    showToast(`Query failed: ${error.message}`);
+  } finally {
+    state.isSending = false;
+    input.disabled = false;
+    byId("chat-send-btn").disabled = false;
+    input.focus();
   }
-}
-
-async function showMetricsDialog() {
-  const metrics = await fetchJson(`${apiBase}/workspace/metrics`);
-  byId("metrics-content").textContent = JSON.stringify(metrics, null, 2);
-  byId("metrics-dialog").showModal();
 }
 
 function initDropZone() {
@@ -353,150 +479,156 @@ function initDropZone() {
   const input = byId("project-files");
 
   zone.addEventListener("click", () => input.click());
+  zone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      input.click();
+    }
+  });
 
-  ["dragenter", "dragover"].forEach((evtName) => {
-    zone.addEventListener(evtName, (evt) => {
-      evt.preventDefault();
+  ["dragenter", "dragover"].forEach((eventName) => {
+    zone.addEventListener(eventName, (event) => {
+      event.preventDefault();
       zone.classList.add("dragover");
     });
   });
 
-  ["dragleave", "drop"].forEach((evtName) => {
-    zone.addEventListener(evtName, (evt) => {
-      evt.preventDefault();
+  ["dragleave", "drop"].forEach((eventName) => {
+    zone.addEventListener(eventName, (event) => {
+      event.preventDefault();
       zone.classList.remove("dragover");
     });
   });
 
-  zone.addEventListener("drop", (evt) => {
-    setPendingFiles(evt.dataTransfer.files);
-  });
-
+  zone.addEventListener("drop", (event) => setPendingFiles(event.dataTransfer.files));
   input.addEventListener("change", () => setPendingFiles(input.files));
 }
 
-function applySidebarState() {
-  const shellSidebar = byId("shell-sidebar");
-  if (!shellSidebar) {
-    return;
-  }
-  shellSidebar.classList.toggle("expanded", state.ui.sidebarOpen);
-}
-
-function applyWorkspacePanelState() {
-  const workspaceApp = byId("workspace-app");
-  const rightPanel = byId("right-panel");
-  const toggleRight = byId("toggle-right");
-  if (!workspaceApp || !rightPanel || !toggleRight) {
-    return;
-  }
-
-  rightPanel.classList.toggle("open", state.ui.rightPanelOpen);
-  toggleRight.textContent = state.ui.rightPanelOpen ? "Close" : "Open";
-  workspaceApp.classList.toggle("right-open", state.ui.rightPanelOpen);
-}
-
 function wireEvents() {
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const page = btn.dataset.view;
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const page = button.dataset.view;
       setActivePage(page, state.currentProject);
-      if (page === "workspace") {
-        await loadProjectDocuments();
-      }
+      if (page === "workspace") await loadProject();
     });
   });
 
-  byId("sidebar-toggle").addEventListener("click", () => {
-    state.ui.sidebarOpen = !state.ui.sidebarOpen;
-    applySidebarState();
+  byId("home-link").addEventListener("click", (event) => {
+    event.preventDefault();
+    setActivePage("dashboard");
   });
-
   byId("sidebar-new-project").addEventListener("click", () => setActivePage("create-project"));
   byId("dashboard-create-project").addEventListener("click", () => setActivePage("create-project"));
-  byId("home-link").addEventListener("click", (evt) => {
-    evt.preventDefault();
-    setActivePage("dashboard", state.currentProject);
-  });
-  byId("profile-btn").addEventListener("click", () => {
-    setActivePage("workspace", state.currentProject);
-  });
-  byId("settings-btn").addEventListener("click", showMetricsDialog);
 
-  byId("project-form").addEventListener("submit", async (evt) => {
-    evt.preventDefault();
+  byId("project-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
     const name = byId("project-name").value.trim();
     if (!name) return;
 
-    const project = await createProject(name);
-    if (state.pendingProjectFiles.length) {
-      const upload = await uploadFiles(project.id, state.pendingProjectFiles);
-      byId("upload-result").textContent = `Created ${project.name}. Uploaded ${upload.succeeded}/${upload.total_files}.`;
-    } else {
-      byId("upload-result").textContent = `Created ${project.name}.`;
-    }
+    const submit = byId("project-submit-btn");
+    submit.disabled = true;
+    setStatus("Creating", "busy");
 
-    state.pendingProjectFiles = [];
-    byId("project-name").value = "";
-    renderPendingProjectFiles();
-    state.currentProject = project.id;
-    await refreshDashboard();
-    setActivePage("workspace", project.id);
-    await loadProjectDocuments();
+    try {
+      const project = await createProject(name);
+      let message = `Created ${project.name}.`;
+
+      if (state.pendingProjectFiles.length) {
+        const upload = await uploadFiles(project.id, state.pendingProjectFiles);
+        message = `Created ${project.name}. Uploaded ${upload.succeeded}/${upload.total_files} files.`;
+      }
+
+      state.pendingProjectFiles = [];
+      byId("project-name").value = "";
+      byId("project-files").value = "";
+      byId("upload-result").textContent = message;
+      renderPendingProjectFiles();
+      state.currentProject = project.id;
+      await refreshDashboard();
+      setActivePage("workspace", project.id);
+      await loadProject();
+      setStatus("Ready", "ok");
+      showToast(message);
+    } catch (error) {
+      byId("upload-result").textContent = error.message;
+      setStatus("Error", "error");
+      showToast(`Create failed: ${error.message}`);
+    } finally {
+      submit.disabled = false;
+    }
   });
 
-  byId("project-files-preview").addEventListener("click", (evt) => {
-    const idx = evt.target.getAttribute("data-remove");
-    if (idx == null) return;
-    state.pendingProjectFiles.splice(Number(idx), 1);
+  byId("project-files-preview").addEventListener("click", (event) => {
+    const index = event.target.getAttribute("data-remove");
+    if (index == null) return;
+    state.pendingProjectFiles.splice(Number(index), 1);
+    renderPendingProjectFiles();
+  });
+
+  byId("clear-project-files").addEventListener("click", () => {
+    state.pendingProjectFiles = [];
+    byId("project-files").value = "";
     renderPendingProjectFiles();
   });
 
   byId("chat-upload-btn").addEventListener("click", async () => {
-    const files = byId("chat-upload-files").files;
-    if (!files || !files.length) return;
-    await uploadFiles(state.currentProject, files);
-    await refreshDashboard();
-    await loadProjectDocuments();
+    const input = byId("chat-upload-files");
+    if (!input.files || !input.files.length) {
+      showToast("Choose files first.");
+      return;
+    }
+
+    byId("chat-upload-btn").disabled = true;
+    setStatus("Uploading", "busy");
+    try {
+      const upload = await uploadFiles(state.currentProject, input.files);
+      input.value = "";
+      await refreshDashboard();
+      await loadProjectDocuments();
+      setStatus("Ready", "ok");
+      showToast(`Uploaded ${upload.succeeded}/${upload.total_files} files.`);
+    } catch (error) {
+      setStatus("Error", "error");
+      showToast(`Upload failed: ${error.message}`);
+    } finally {
+      byId("chat-upload-btn").disabled = false;
+    }
   });
 
-  byId("chat-documents").addEventListener("click", async (evt) => {
-    const docId = evt.target.getAttribute("data-doc-id");
+  byId("chat-documents").addEventListener("click", async (event) => {
+    const docId = event.target.getAttribute("data-doc-id");
     if (!docId) return;
-    await deleteDocument(state.currentProject, docId);
-    await loadProjectDocuments();
+    if (!window.confirm("Delete this document from the project?")) return;
+
+    try {
+      await fetchJson(`${apiBase}/workspace/projects/${encodeURIComponent(state.currentProject)}/documents/${encodeURIComponent(docId)}`, {
+        method: "DELETE",
+      });
+      await refreshDashboard();
+      await loadProjectDocuments();
+      showToast("Document deleted.");
+    } catch (error) {
+      showToast(`Delete failed: ${error.message}`);
+    }
   });
 
-  byId("doc-search").addEventListener("input", loadProjectDocuments);
-
-  byId("chat-send-btn").addEventListener("click", sendChat);
-  byId("chat-input").addEventListener("keydown", (evt) => {
-    if (evt.key === "Enter") {
+  byId("doc-search").addEventListener("input", renderDocuments);
+  byId("chat-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendChat();
+  });
+  byId("chat-input").addEventListener("input", autoSizeChatInput);
+  byId("chat-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       sendChat();
     }
   });
 
-  byId("chat-new-project-btn").addEventListener("click", () => setActivePage("create-project"));
-  byId("chat-statistics-btn").addEventListener("click", () => setActivePage("dashboard"));
-  byId("chat-metrics-btn").addEventListener("click", showMetricsDialog);
-  byId("chat-settings-btn").addEventListener("click", () => {
-    state.ui.rightPanelOpen = !state.ui.rightPanelOpen;
-    applyWorkspacePanelState();
-  });
-
-  byId("toggle-right").addEventListener("click", () => {
-    state.ui.rightPanelOpen = !state.ui.rightPanelOpen;
-    applyWorkspacePanelState();
-  });
-
-  byId("close-metrics").addEventListener("click", () => byId("metrics-dialog").close());
-
   window.addEventListener("hashchange", async () => {
     const parsed = parseHash();
     setActivePage(parsed.page, parsed.projectId, false);
-    if (parsed.page === "workspace") {
-      await loadProjectDocuments();
-    }
+    if (parsed.page === "workspace") await loadProject();
   });
 
   initDropZone();
@@ -504,15 +636,18 @@ function wireEvents() {
 
 async function init() {
   wireEvents();
-  applySidebarState();
-  applyWorkspacePanelState();
   renderPendingProjectFiles();
-  await refreshDashboard();
+  renderSources();
 
-  const parsed = parseHash();
-  setActivePage(parsed.page, parsed.projectId, false);
-  if (parsed.page === "workspace") {
-    await loadProjectDocuments();
+  try {
+    await refreshDashboard();
+    const parsed = parseHash();
+    setActivePage(parsed.page, parsed.projectId, false);
+    if (parsed.page === "workspace") await loadProject();
+    setStatus("Ready", "ok");
+  } catch (error) {
+    setStatus("Offline", "error");
+    showToast(`Backend unavailable: ${error.message}`);
   }
 }
 

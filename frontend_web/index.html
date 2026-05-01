@@ -4,123 +4,134 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Offline RAG Workspace</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/ui/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <a id="home-link" class="brand" href="#/dashboard">Offline RAG Workspace</a>
-    <div class="row">
-      <button id="profile-btn" class="button ghost">Profile</button>
-      <button id="settings-btn" class="button ghost">Settings</button>
-    </div>
+    <a id="home-link" class="brand" href="#/dashboard">
+      <span class="brand-mark">R</span>
+      <span>
+        <strong>Offline RAG</strong>
+        <small>Document question answering</small>
+      </span>
+    </a>
+    <span id="status-pill" class="status-pill">Ready</span>
   </header>
 
   <div class="shell">
-    <aside id="shell-sidebar" class="shell-sidebar panel collapsed">
-      <div class="sidebar-head">
-        <button id="sidebar-toggle" class="button ghost">☰</button>
-        <span class="sidebar-title">Menu</span>
-      </div>
-      <button id="sidebar-new-project" class="button">+ New Project</button>
-      <h3 class="sidebar-heading">Projects</h3>
-      <div id="shell-projects" class="list"></div>
-      <h3 class="sidebar-heading">Navigate</h3>
-      <nav class="nav-tabs vertical">
-        <button class="tab-btn active" data-view="dashboard">Dashboard</button>
-        <button class="tab-btn" data-view="create-project">Create Project</button>
-        <button class="tab-btn" data-view="workspace">Workspace</button>
+    <aside class="sidebar">
+      <button id="sidebar-new-project" class="button primary full" type="button">New Project</button>
+
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
+        <button class="nav-button" type="button" data-view="workspace">Chat</button>
       </nav>
+
+      <div class="sidebar-section">
+        <h2>Projects</h2>
+        <div id="shell-projects" class="stack"></div>
+      </div>
     </aside>
 
-    <main class="shell-main page">
+    <main class="main">
       <section id="view-dashboard" class="view active">
-        <div class="dashboard-toolbar">
-          <button id="dashboard-create-project" class="button">+ Create Project</button>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h1>Dashboard</h1>
+          </div>
+          <button id="dashboard-create-project" class="button primary" type="button">Create Project</button>
         </div>
-        <h2>Dashboard</h2>
-        <div class="cards" id="dashboard-cards"></div>
-        <h3>Recent Projects</h3>
-        <div id="recent-projects" class="panel"></div>
-        <h3>Recent Chats</h3>
-        <div id="recent-chats" class="panel"></div>
+
+        <div id="dashboard-cards" class="metric-grid"></div>
+
+        <div class="two-column">
+          <section class="panel">
+            <h2>Recent Projects</h2>
+            <div id="recent-projects" class="stack"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Recent Chats</h2>
+            <div id="recent-chats" class="stack"></div>
+          </section>
+        </div>
       </section>
 
       <section id="view-create-project" class="view">
-        <h2>Create Project</h2>
-        <div class="panel create-project-panel">
-          <form id="project-form">
-            <label>Project Name</label>
-            <input id="project-name" required minlength="2" maxlength="100" placeholder="Enter project name" />
+        <div class="page-head compact">
+          <div>
+            <p class="eyebrow">Set up documents</p>
+            <h1>Create Project</h1>
+          </div>
+        </div>
 
-            <label>Upload Files</label>
-            <div id="project-drop-zone" class="drop-zone">
-              Drag and drop files here or click to select
+        <section class="panel form-panel">
+          <form id="project-form">
+            <label for="project-name">Project name</label>
+            <input id="project-name" required minlength="2" maxlength="100" placeholder="Example: Research notes" />
+
+            <label for="project-files">Documents</label>
+            <div id="project-drop-zone" class="drop-zone" role="button" tabindex="0">
+              <strong>Drop files here</strong>
+              <span>or click to select files</span>
               <input id="project-files" type="file" multiple hidden />
             </div>
 
-            <label>Selected Files</label>
-            <div id="project-files-preview" class="list"></div>
+            <div class="inline-title">
+              <label>Selected files</label>
+              <button id="clear-project-files" class="button secondary small" type="button">Clear</button>
+            </div>
+            <div id="project-files-preview" class="stack"></div>
 
-            <button type="submit" class="button">Create Project</button>
-            <div id="upload-result" class="muted"></div>
+            <button id="project-submit-btn" class="button primary full" type="submit">Create Project</button>
+            <div id="upload-result" class="notice" aria-live="polite"></div>
           </form>
-        </div>
+        </section>
       </section>
 
-      <section id="view-workspace" class="view">
-        <div id="workspace-app" class="app">
-          <main class="chat-section">
-            <div class="header">
+      <section id="view-workspace" class="view workspace-view">
+        <div class="workspace">
+          <section class="chat-panel">
+            <div class="workspace-head">
               <div>
-                <strong id="chat-project-name">Default Project</strong>
-              </div>
-              <div class="row">
-                <button id="chat-new-project-btn" class="button">New Project</button>
-                <button id="chat-statistics-btn" class="button">Stats</button>
-                <button id="chat-metrics-btn" class="button">Metrics</button>
-                <button id="chat-settings-btn" class="button ghost">⚙</button>
+                <p class="eyebrow">Current project</p>
+                <h1 id="chat-project-name">Default Project</h1>
               </div>
             </div>
-            <div id="chat-messages" class="chat-body"></div>
-            <div class="chat-input">
-              <div class="row">
-                <input id="chat-input" placeholder="Type message......" />
-                <button id="chat-send-btn" class="button">→</button>
-              </div>
-            </div>
-          </main>
 
-          <aside id="right-panel" class="sidebar-right">
-            <div class="panel-title-row">
-              <h3>Documents</h3>
-              <button id="toggle-right" class="button">Open</button>
-            </div>
-            <div class="search">
-              <input id="doc-search" placeholder="Search files" />
-            </div>
-            <input id="chat-upload-files" type="file" multiple />
-            <button id="chat-upload-btn" class="button">Add File</button>
-            <div id="chat-documents" class="list"></div>
-            <h3>Insights</h3>
-            <div class="card" id="debug-info-card">Debug info will appear here.</div>
-            <div class="card" id="token-usage-card">Token usage metrics will appear here.</div>
-            <div class="card" id="retrieved-chunks-card">Retrieved chunks preview will appear here.</div>
+            <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+
+            <form id="chat-form" class="chat-form">
+              <textarea id="chat-input" rows="1" placeholder="Ask a question about this project's documents"></textarea>
+              <button id="chat-send-btn" class="button primary send-button" type="submit">Send</button>
+            </form>
+          </section>
+
+          <aside class="documents-panel">
+            <section class="panel">
+              <h2>Documents</h2>
+              <div class="search">
+                <input id="doc-search" placeholder="Search documents" />
+              </div>
+              <div class="upload-row">
+                <input id="chat-upload-files" type="file" multiple />
+                <button id="chat-upload-btn" class="button primary" type="button">Add Files</button>
+              </div>
+              <div id="chat-documents" class="stack document-list"></div>
+            </section>
+
+            <section class="panel">
+              <h2>Sources</h2>
+              <div id="source-list" class="stack"></div>
+            </section>
           </aside>
         </div>
       </section>
     </main>
   </div>
 
-  <dialog id="metrics-dialog">
-    <h3>Metrics</h3>
-    <pre id="metrics-content"></pre>
-    <button id="close-metrics" class="button">Close</button>
-  </dialog>
-
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/ui/app.js"></script>
 </body>
 </html>

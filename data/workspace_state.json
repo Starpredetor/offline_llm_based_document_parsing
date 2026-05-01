@@ -132,7 +132,64 @@
         "uploaded_at": 1776162538.393077
       }
     ],
-    "malware-analysis-capstone-project": []
+    "malware-analysis-capstone-project": [
+      {
+        "id": "cc843a67-98dd-4ee0-9d34-91c518ebeed1",
+        "filename": "CE_TE_V_COOS_Week_1A.pdf",
+        "chunks_added": 14,
+        "status": "success",
+        "uploaded_at": 1776664105.230776
+      },
+      {
+        "id": "7f5b0a3d-43aa-4a3a-8427-74b8538d0c72",
+        "filename": "CE_TE_V_COOS_Week_1B.pdf",
+        "chunks_added": 18,
+        "status": "success",
+        "uploaded_at": 1776664105.6393745
+      },
+      {
+        "id": "73c27a8e-5097-45e1-a02e-7a713889a06a",
+        "filename": "CE_TE_V_COOS_Week_2A.pdf",
+        "chunks_added": 23,
+        "status": "success",
+        "uploaded_at": 1776664106.1253123
+      },
+      {
+        "id": "090c113d-77e7-4062-b959-4a0449375165",
+        "filename": "CE_TE_V_COOS_Week_2B.pdf",
+        "chunks_added": 13,
+        "status": "success",
+        "uploaded_at": 1776664106.4175632
+      },
+      {
+        "id": "94c3fd35-383e-4c2b-9bd8-857e2bfb2fb7",
+        "filename": "CE_TE_V_COOS_Week_3A.pdf",
+        "chunks_added": 35,
+        "status": "success",
+        "uploaded_at": 1776664107.1966603
+      },
+      {
+        "id": "5d43438f-f697-49b3-a8b4-45da488fbe66",
+        "filename": "CE_TE_V_COOS_Week_3B_20_282_29.pdf",
+        "chunks_added": 5,
+        "status": "success",
+        "uploaded_at": 1776664107.3057637
+      },
+      {
+        "id": "35392af6-fb4b-420c-9e25-4ce6780fffdc",
+        "filename": "computer-organization-and-architecture-5-638.webp",
+        "chunks_added": 1,
+        "status": "success",
+        "uploaded_at": 1776664110.433136
+      },
+      {
+        "id": "6d4fd747-5a12-4f81-93b5-44bde29c531b",
+        "filename": "vn_cpu.png",
+        "chunks_added": 1,
+        "status": "success",
+        "uploaded_at": 1776664111.4638894
+      }
+    ]
   },
   "project_notebooks": {
     "default": [],
@@ -149,11 +206,21 @@
       "latency_ms": 64790.5,
       "used_cache": false,
       "created_at": 1776162668.7440617
+    },
+    {
+      "id": "eb05626d-3b63-4a81-bc6f-062c45d1e6e6",
+      "project_id": "malware-analysis-capstone-project",
+      "query": "give me an overview of the topic covered in the source",
+      "answer": "\nSure, happy to help! The source covers topics such as computer architecture, computer organization, and operating systems. The primary focus is on understanding the underlying principles and concepts of these fields, with a particular emphasis on how they are implemented in practice. The source also provides detailed examples and case studies to help illustrate key concepts and theories. Overall, the goal is to provide a comprehensive and accessible introduction to these topics, with an emphasis both on theoretical foundations and practical application.",
+      "source_count": 5,
+      "latency_ms": 18028.28,
+      "used_cache": false,
+      "created_at": 1776664148.4112387
     }
   ],
   "metrics": {
-    "query_count": 1,
+    "query_count": 2,
     "cache_hits": 0,
-    "total_query_latency_ms": 64790.50020000432
+    "total_query_latency_ms": 82818.78279999364
   }
 }

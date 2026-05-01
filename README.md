@@ -26,7 +26,7 @@ Given a query q and a local corpus D (heterogeneous text and image-origin conten
 
 End-to-end flow:
 
-1. Upload documents through API or Streamlit UI.
+1. Upload documents through the API.
 2. Extract text:
 	 - PDF: direct text extraction; if empty page text then OCR on rendered page image.
 	 - DOCX: paragraph extraction.
@@ -342,13 +342,9 @@ $env:TESSDATA_PREFIX = "C:\Program Files\Tesseract-OCR\tessdata"
 
 uvicorn backend.main:app --reload --port 8000
 
-### 6) Launch frontend
+### 6) Backend is now running
 
-streamlit run frontend/app.py --server.port 8501
-
-Or run combined startup helper:
-
-run_project.bat
+The backend API is available at http://127.0.0.1:8000/
 
 ## Limitations
 

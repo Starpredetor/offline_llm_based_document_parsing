@@ -15,6 +15,12 @@ VISION_REPO = "Salesforce/blip-image-captioning-base"
 def download_embedding() -> Path:
     target = MODELS_DIR / "embeddings" / "all-MiniLM-L6-v2"
     target.mkdir(parents=True, exist_ok=True)
+    
+    # Check if model is already downloaded
+    if (target / "config.json").exists() and (target / "pytorch_model.bin").exists() or (target / "model.safetensors").exists():
+        print(f"Embedding model already downloaded: {target}")
+        return target
+    
     snapshot_download(
         repo_id=EMBEDDING_REPO,
         local_dir=str(target),
@@ -26,6 +32,12 @@ def download_embedding() -> Path:
 def download_llm() -> Path:
     target = MODELS_DIR / "llm" / "TinyLlama-1.1B-Chat-v1.0"
     target.mkdir(parents=True, exist_ok=True)
+    
+    # Check if model is already downloaded
+    if (target / "config.json").exists() and ((target / "pytorch_model.bin").exists() or (target / "model.safetensors").exists()):
+        print(f"LLM model already downloaded: {target}")
+        return target
+    
     snapshot_download(
         repo_id=LLM_REPO,
         local_dir=str(target),
@@ -49,6 +61,12 @@ def download_llm() -> Path:
 def download_vision() -> Path:
     target = MODELS_DIR / "vision" / "blip-image-captioning-base"
     target.mkdir(parents=True, exist_ok=True)
+    
+    # Check if model is already downloaded
+    if (target / "config.json").exists() and ((target / "pytorch_model.bin").exists() or (target / "model.safetensors").exists()):
+        print(f"Vision model already downloaded: {target}")
+        return target
+    
     snapshot_download(
         repo_id=VISION_REPO,
         local_dir=str(target),

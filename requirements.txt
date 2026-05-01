@@ -20,5 +20,4 @@ accelerate
 torch
 huggingface-hub
 
-streamlit
 requests
